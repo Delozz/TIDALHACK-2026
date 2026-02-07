@@ -26,7 +26,9 @@ def get_lifestyle_reality_check(api_key=None, city="", debt=0, lifestyle="Balanc
     # CONFIGURE
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Using Gemini 3 Flash Preview - Latest balanced model (Dec 2025)
+        # https://ai.google.dev/gemini-api/docs/models#gemini-3-flash
+        model = genai.GenerativeModel('gemini-3-flash-preview')
     except Exception as e:
         return f"Configuration Error: {str(e)}"
 
@@ -81,7 +83,9 @@ def get_career_advice(api_key=None, resume_data=None, target_city=""):
 
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Using Gemini 3 Flash Preview - Latest balanced model (Dec 2025)
+        # https://ai.google.dev/gemini-api/docs/models#gemini-3-flash
+        model = genai.GenerativeModel('gemini-3-flash-preview')
     except Exception as e:
         return f"Configuration Error: {str(e)}"
 
