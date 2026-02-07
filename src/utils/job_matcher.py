@@ -26,7 +26,7 @@ def get_lifestyle_reality_check(api_key=None, city="", debt=0, lifestyle="Balanc
     # CONFIGURE
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-3-flash-preview')
+        model = genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
         return f"Configuration Error: {str(e)}"
 
@@ -81,7 +81,7 @@ def get_career_advice(api_key=None, resume_data=None, target_city=""):
 
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-3-flash-preview')
+        model = genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
         return f"Configuration Error: {str(e)}"
 

@@ -35,8 +35,8 @@ class AIResumeParser:
 
         # Configure Gemini
         genai.configure(api_key=self.api_key)
-        # Using Gemini 3 Flash Preview - Latest model
-        self.model = genai.GenerativeModel('gemini-3-flash-preview')
+        # Using Gemini 1.5 Flash - Stable and reliable model
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
 
         self.raw_text = ""
         self.ai_analysis = {}

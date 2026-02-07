@@ -2,8 +2,13 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import os
+from dotenv import load_dotenv
 from src.loader import load_all_salaries
 from src.logic import calculate_taxes, project_savings, calculate_thriving_score, format_currency
+
+# Load environment variables from .env file
+load_dotenv()
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="NextStep", page_icon="🎓", layout="wide")
@@ -74,7 +79,30 @@ with st.sidebar:
     
     if st.button("Calculate Future"):
         st.session_state['selected_category'] = selected_category
-        st.success("Crunching the numbers...")
+        st.session_state['calculate_clicked'] = True
+        st.session_state['show_results'] = False  # Will be set to True after AI completes
+        
+        # If resume is uploaded, trigger AI analysis
+        if uploaded_file is not None:
+            with st.spinner("🤖 AI is analyzing your resume..."):
+                try:
+                    from src.utils.resume_parser import parse_resume_with_ai
+                    
+                    api_key = os.getenv('GEMINI_API_KEY')
+                    if not api_key:
+                        st.warning("⚠️ API key not found. Resume analysis will be limited.")
+                        st.session_state['ai_results'] = None
+                    else:
+                        # Run AI analysis
+                        ai_results = parse_resume_with_ai(uploaded_file, api_key)
+                        st.session_state['ai_results'] = ai_results
+                        st.session_state['show_results'] = True
+                except Exception as e:
+                    st.error(f"❌ AI Analysis failed: {e}")
+                    st.session_state['ai_results'] = None
+        else:
+            st.session_state['ai_results'] = None
+            st.session_state['show_results'] = True
 
 # --- FILTER DATA BASED ON SELECTION ---
 filtered_data = df[df['Category'] == selected_category].copy()
@@ -98,6 +126,84 @@ col1, col2, col3 = st.columns(3)
 col1.metric("Top City Match", top_city, "Highest Pay")
 col2.metric("Projected Savings", "$1,204/mo", "-5% vs avg")
 col3.metric("Average Salary", f"${avg_salary:,.0f}", "For this role")
+
+# --- RESULTS POPUP (if Calculate Future was clicked) ---
+if st.session_state.get('show_results', False):
+    st.balloons()  # Celebration effect!
+    
+    # Create a prominent results card
+    st.markdown("""
+        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    padding: 30px; border-radius: 15px; margin: 20px 0;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
+            <h2 style='color: white; text-align: center; margin: 0;'>🎉 Your Future is Calculated!</h2>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Display key insights in a nice grid
+    insight_col1, insight_col2, insight_col3 = st.columns(3)
+    
+    with insight_col1:
+        st.markdown("""
+            <div style='background-color: #1E2130; padding: 20px; border-radius: 10px; text-align: center;'>
+                <h3 style='color: #00ff88; margin: 0;'>✅ Analysis Complete</h3>
+                <p style='color: #888; margin: 5px 0;'>Career path analyzed</p>
+                <p style='font-size: 24px; color: white; margin: 10px 0;'><b>{}</b></p>
+            </div>
+        """.format(selected_category), unsafe_allow_html=True)
+    
+    with insight_col2:
+        cities_analyzed = len(filtered_data)
+        st.markdown("""
+            <div style='background-color: #1E2130; padding: 20px; border-radius: 10px; text-align: center;'>
+                <h3 style='color: #667eea; margin: 0;'>🌎 Cities Analyzed</h3>
+                <p style='color: #888; margin: 5px 0;'>Location opportunities</p>
+                <p style='font-size: 24px; color: white; margin: 10px 0;'><b>{}</b></p>
+            </div>
+        """.format(cities_analyzed), unsafe_allow_html=True)
+    
+    with insight_col3:
+        # If AI analysis was done, show resume score
+        if st.session_state.get('ai_results'):
+            ai_data = st.session_state['ai_results']
+            # Extract a score if available
+            score_display = "✨ AI-Powered"
+        else:
+            score_display = "📊 Ready"
+        
+        st.markdown("""
+            <div style='background-color: #1E2130; padding: 20px; border-radius: 10px; text-align: center;'>
+                <h3 style='color: #ff4b4b; margin: 0;'>🎯 Status</h3>
+                <p style='color: #888; margin: 5px 0;'>Your profile</p>
+                <p style='font-size: 24px; color: white; margin: 10px 0;'><b>{}</b></p>
+            </div>
+        """.format(score_display), unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Navigation buttons
+    col_btn1, col_btn2, col_btn3 = st.columns(3)
+    
+    with col_btn1:
+        if st.button("📊 View Detailed Data", use_container_width=True):
+            st.session_state['nav_to_tab'] = 'Map View'
+            st.info("👇 Scroll down to the 'Map View' tab and click 'See the math behind your score'")
+    
+    with col_btn2:
+        if st.button("💰 Explore Budget Lab", use_container_width=True):
+            st.session_state['nav_to_tab'] = 'Budget Lab'
+            st.info("👇 Check out the 'Budget Lab' tab for detailed financial breakdown")
+    
+    with col_btn3:
+        if uploaded_file:
+            if st.button("📄 Resume Analysis", use_container_width=True):
+                st.session_state['nav_to_tab'] = 'Resume Pivot'
+                st.info("👇 Go to 'Resume Pivot' tab for your full resume analysis")
+    
+    # Clear the results flag so it doesn't show every time
+    if st.button("✅ Got it! (Close this message)", type="primary"):
+        st.session_state['show_results'] = False
+        st.rerun()
 
 st.divider()
 
@@ -296,6 +402,36 @@ with tab2:
 # ========== TAB 3: RESUME PIVOT ==========
 with tab3:
     st.subheader("Resume Analysis & Career Pivot")
+    
+    # --- DISPLAY AI RESULTS IF AVAILABLE ---
+    if st.session_state.get('ai_results') and uploaded_file:
+        ai_data = st.session_state['ai_results']
+        
+        # Prominent AI Analysis Results Card
+        st.markdown("""
+            <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
+                        padding: 25px; border-radius: 12px; margin-bottom: 20px;'>
+                <h2 style='color: white; margin: 0;'>🤖 AI-Powered Resume Analysis</h2>
+                <p style='color: rgba(255,255,255,0.9); margin: 5px 0;'>Deep analysis powered by Gemini AI</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Display key AI insights
+        if 'skills' in ai_data and ai_data['skills']:
+            st.markdown("### 🎯 Skills Identified by AI")
+            skills_text = ", ".join(ai_data['skills'][:10])  # Show top 10
+            st.success(f"**Detected Skills:** {skills_text}")
+        
+        if 'career_fit' in ai_data:
+            st.markdown("### 💼 Career Fit Analysis")
+            st.info(ai_data['career_fit'])
+        
+        if 'recommendations' in ai_data:
+            st.markdown("### 💡 AI Recommendations")
+            for rec in ai_data['recommendations'][:5]:  # Show top 5
+                st.write(f"• {rec}")
+        
+        st.divider()
     
     # Hardcoded dictionary of hot keywords for STEM careers
     STEM_KEYWORDS = {
