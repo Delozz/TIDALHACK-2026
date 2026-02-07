@@ -60,3 +60,48 @@ def project_savings(monthly_net, rent, loan_payment, lifestyle):
     
     savings = monthly_net - rent - loan_payment - lifestyle_cost
     return int(savings)
+
+def project_5yr_wealth(monthly_net, rent, col_index):
+    """
+    Projects wealth accumulation over 5 years.
+    Factors in savings, cost of living, and compound growth.
+    
+    Args:
+        monthly_net: Monthly net income after taxes
+        rent: Monthly rent cost
+        col_index: Cost of living index (0-100)
+        
+    Returns:
+        int: Projected wealth after 5 years
+    """
+    # Safety check
+    if col_index == 0: 
+        col_index = 50
+    
+    # Calculate discretionary income (after rent)
+    discretionary = monthly_net - rent
+    
+    # Estimate average monthly expenses based on COL
+    # Higher COL = higher expenses beyond rent
+    col_factor = col_index / 100
+    avg_monthly_expenses = 1000 + (col_factor * 1500)  # Base + COL-adjusted expenses
+    
+    # Monthly savings
+    monthly_savings = discretionary - avg_monthly_expenses
+    
+    # If negative savings, return 0
+    if monthly_savings < 0:
+        return 0
+    
+    # Project 5 years with modest investment returns (5% annual = 0.4% monthly approx)
+    # Using future value of annuity formula: FV = PMT × [(1 + r)^n - 1] / r
+    months = 60  # 5 years
+    monthly_rate = 0.004  # ~5% annual return
+    
+    # Future value calculation
+    if monthly_rate > 0:
+        wealth = monthly_savings * (((1 + monthly_rate) ** months - 1) / monthly_rate)
+    else:
+        wealth = monthly_savings * months
+    
+    return int(wealth)

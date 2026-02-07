@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import os
 from dotenv import load_dotenv
 from src.loader import load_all_salaries
-from src.logic import calculate_taxes, project_savings, calculate_thriving_score, format_currency
+from src.logic import calculate_taxes, project_savings, calculate_thriving_score, format_currency, project_5yr_wealth
 
 # Load environment variables from .env file
 load_dotenv()
@@ -116,7 +116,21 @@ if filtered_data.empty:
 # Find the city with highest salary
 top_city_row = filtered_data.loc[filtered_data['Salary'].idxmax()]
 top_city = top_city_row['City']
+top_city_salary = top_city_row['Salary']
+top_city_state = top_city_row['State']
+top_city_rent = top_city_row['Rent']
+top_city_col = top_city_row['COL']
 avg_salary = filtered_data['Salary'].mean()
+
+# Calculate 5-year wealth for the top city
+top_city_monthly_net = calculate_taxes(top_city_salary, top_city_state)
+wealth_5yr = project_5yr_wealth(top_city_monthly_net, top_city_rent, top_city_col)
+
+# Calculate average monthly savings across all cities for this role
+avg_monthly_net = filtered_data.apply(
+    lambda row: calculate_taxes(row['Salary'], row['State']), axis=1
+).mean()
+avg_savings_estimate = int(avg_monthly_net - filtered_data['Rent'].mean() - 1500)  # 1500 = avg expenses
 
 # For display purposes
 data_for_display = filtered_data
@@ -124,7 +138,7 @@ data_for_display = filtered_data
 # --- KEY METRICS ROW ---
 col1, col2, col3 = st.columns(3)
 col1.metric("Top City Match", top_city, "Highest Pay")
-col2.metric("Projected Savings", "$1,204/mo", "-5% vs avg")
+col2.metric("5-Year Wealth Potential", f"${wealth_5yr:,}", f"in {top_city}")
 col3.metric("Average Salary", f"${avg_salary:,.0f}", "For this role")
 
 # --- RESULTS POPUP (if Calculate Future was clicked) ---
