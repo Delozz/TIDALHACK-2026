@@ -1,5 +1,5 @@
 """
-AI-Powered Resume Parser Module using Google Gemini 3 Flash
+AI-Powered Resume Parser Module using Google Gemini Flash
 Person C - Feature Specialist
 Uses Gemini AI to intelligently extract skills, experience, and insights from resumes
 """
@@ -13,24 +13,30 @@ import google.generativeai as genai
 
 
 class AIResumeParser:
-    """AI-powered resume analysis using Gemini 3 Flash"""
+    """AI-powered resume analysis using Gemini Flash"""
 
     def __init__(self, api_key: str = None):
         """
         Initialize the AI Resume Parser
 
         Args:
-            api_key: Google Gemini API key (hardcoded for hackathon)
+            api_key: Google Gemini API key (loaded from environment if not provided)
         """
-        # Hardcoded API key for hackathon collaboration
-        # IMPORTANT: Remove this before making repo public!
-        self.api_key = api_key or "AIzaSyCoY54LkK7bZw_dG3uKe7qObT1ea1ETMVE"
+        # Load API key from parameter or environment variable
+        if api_key:
+            self.api_key = api_key
+        else:
+            # Try to load from environment
+            self.api_key = os.getenv('GEMINI_API_KEY', '')
+            if not self.api_key:
+                raise ValueError(
+                    "GEMINI_API_KEY not found. Please provide api_key parameter or set GEMINI_API_KEY environment variable."
+                )
 
         # Configure Gemini
         genai.configure(api_key=self.api_key)
-        # Using Gemini 3 Flash - Latest model (Released Dec 2025)
-        # Offers Pro-grade reasoning at Flash-level speed
-        self.model = genai.GenerativeModel('gemini-3-flash')
+        # Using Gemini 3 Flash Preview - Latest model
+        self.model = genai.GenerativeModel('gemini-3-flash-preview')
 
         self.raw_text = ""
         self.ai_analysis = {}

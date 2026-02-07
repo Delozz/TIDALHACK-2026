@@ -1,18 +1,32 @@
+import os
 import google.generativeai as genai
 
 
-def get_lifestyle_reality_check(api_key, city, debt, lifestyle):
+def get_lifestyle_reality_check(api_key=None, city="", debt=0, lifestyle="Balanced"):
     """
     Agent 1: The Financial Realist.
     Generates a 'Vibe Check' based on the user's debt and lifestyle choice.
+    
+    Args:
+        api_key: Google Gemini API key (loaded from env if not provided)
+        city: Target city name
+        debt: Student loan debt amount
+        lifestyle: Lifestyle preference (Frugal, Balanced, Boujee)
+    
+    Returns:
+        str: AI-generated reality check message
     """
+    # Load API key from parameter or environment
     if not api_key:
-        return "Please enter an API Key."
+        api_key = os.getenv('GEMINI_API_KEY', '')
+    
+    if not api_key:
+        return "⚠️ Please set GEMINI_API_KEY environment variable or provide api_key parameter."
 
     # CONFIGURE
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-3-flash-preview')
     except Exception as e:
         return f"Configuration Error: {str(e)}"
 
@@ -21,7 +35,7 @@ def get_lifestyle_reality_check(api_key, city, debt, lifestyle):
     
     User Profile:
     - Target City: {city}
-    - Student Loans: ${debt}
+    - Student Loans: ${debt:,}
     - Lifestyle Preference: {lifestyle} (Options: Frugal, Balanced, Boujee)
     
     Task:
@@ -29,6 +43,8 @@ def get_lifestyle_reality_check(api_key, city, debt, lifestyle):
     1. Can they afford this lifestyle in this city with that debt?
     2. What is the harsh reality (e.g., "You will need 3 roommates")?
     3. End with one helpful tip for that specific city.
+    
+    Be direct but encouraging. Use a friendly, big-sibling tone.
     """
 
     try:
@@ -39,22 +55,39 @@ def get_lifestyle_reality_check(api_key, city, debt, lifestyle):
         return "⚠️ AI Error: Check your API Key or Quota."
 
 
-def get_career_advice(api_key, resume_data, target_city):
+def get_career_advice(api_key=None, resume_data=None, target_city=""):
     """
     Agent 2: The Career Coach.
     Suggests a specific 'Pivot' to help them succeed in the target city.
+    
+    Args:
+        api_key: Google Gemini API key (loaded from env if not provided)
+        resume_data: Dictionary with resume information (skills, major, etc.)
+        target_city: Target city for job search
+    
+    Returns:
+        str: AI-generated career advice
     """
+    # Load API key from parameter or environment
     if not api_key:
-        return "Please enter an API Key."
+        api_key = os.getenv('GEMINI_API_KEY', '')
+    
+    if not api_key:
+        return "⚠️ Please set GEMINI_API_KEY environment variable."
+    
+    # Handle missing resume data
+    if not resume_data:
+        resume_data = {}
 
-    genai.configure(api_key=api_key)
-    # CHANGED: Removed 'self.' and used a valid model name
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-3-flash-preview')
+    except Exception as e:
+        return f"Configuration Error: {str(e)}"
 
     # SAFEGUARD: Handle cases where no skills are found
     raw_skills = resume_data.get('skills', [])
-    skills = ", ".join(
-        raw_skills) if raw_skills else "General student background"
+    skills = ", ".join(raw_skills) if raw_skills else "General student background"
     major = resume_data.get('major', 'General')
 
     prompt = f"""

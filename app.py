@@ -2,14 +2,21 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from src.utils.loader import load_all_salaries
-from src.logic import calculate_taxes, project_savings, calculate_thriving_score
+from src.loader import load_all_salaries
+from src.logic import calculate_taxes, project_savings, calculate_thriving_score, format_currency
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="NextStep", page_icon="🎓", layout="wide")
 
 # --- LOAD DATA ---
-df = load_all_salaries()
+try:
+    df = load_all_salaries()
+    if df.empty:
+        st.error("⚠️ No data loaded. Please check your data source.")
+        st.stop()
+except Exception as e:
+    st.error(f"❌ Failed to load data: {e}")
+    st.stop()
 
 # --- CUSTOM STYLING FUNCTION ---
 def style_metric_cards():
@@ -55,7 +62,9 @@ with st.sidebar:
     st.title("NextStep")
     st.write("Plan your life after the cap and gown.")
     
-    selected_category = st.selectbox("Select your Career Path", df['Category'].unique())
+    # Get available categories from data
+    available_categories = df['Category'].unique()
+    selected_category = st.selectbox("Select your Career Path", available_categories)
     debt = st.number_input("Student Loan Debt ($)", min_value=0, max_value=500000, value=30000, step=1000)
     lifestyle = st.select_slider("Lifestyle Preference", options=["Frugal", "Balanced", "Boujee"])
     
@@ -68,53 +77,27 @@ with st.sidebar:
         st.success("Crunching the numbers...")
 
 # --- FILTER DATA BASED ON SELECTION ---
-filtered_data = df[df['Category'] == selected_category]
+filtered_data = df[df['Category'] == selected_category].copy()
 
-# --- MOCK DATA (Fallback for development) ---
-df_mock = pd.DataFrame({
-    'City': ['Austin', 'Seattle', 'New York', 'Denver'],
-    'Lat': [30.26, 47.60, 40.71, 39.73],
-    'Lon': [-97.74, -122.33, -74.00, -104.99],
-    'Score': [88, 75, 60, 82],
-    'Salary': [95000, 130000, 145000, 110000],
-    'Rent': [1200, 1800, 2800, 1400],
-    'Jobs': [450, 620, 890, 320]
-})
+# Check if filtered data is empty
+if filtered_data.empty:
+    st.error(f"⚠️ No data found for {selected_category}. Please select a different career path.")
+    st.stop()
 
 # --- DYNAMIC METRICS CALCULATION ---
-if not filtered_data.empty:
-    # Find the city with highest salary (or Score if Salary doesn't exist)
-    if 'Salary' in filtered_data.columns:
-        top_city_row = filtered_data.loc[filtered_data['Salary'].idxmax()]
-        top_metric_value = f"${top_city_row['Salary']:,.0f}"
-        metric_col = 'Salary'
-    elif 'Score' in filtered_data.columns:
-        top_city_row = filtered_data.loc[filtered_data['Score'].idxmax()]
-        top_metric_value = f"{top_city_row['Score']}/100"
-        metric_col = 'Score'
-    else:
-        # Fallback if neither column exists
-        top_city_row = filtered_data.iloc[0]
-        top_metric_value = "N/A"
-        metric_col = None
-    
-    top_city = top_city_row['City'] if 'City' in top_city_row else "Unknown"
-    avg_salary = filtered_data['Salary'].mean() if 'Salary' in filtered_data.columns else 0
-    
-    # For display purposes
-    data_for_display = filtered_data
-else:
-    # Fallback to mock data if filtered_data is empty
-    top_city = "Austin"
-    top_metric_value = "$95,000"
-    avg_salary = 120000
-    data_for_display = df_mock
+# Find the city with highest salary
+top_city_row = filtered_data.loc[filtered_data['Salary'].idxmax()]
+top_city = top_city_row['City']
+avg_salary = filtered_data['Salary'].mean()
+
+# For display purposes
+data_for_display = filtered_data
 
 # --- KEY METRICS ROW ---
 col1, col2, col3 = st.columns(3)
-col1.metric("Top City Match", top_city, "Highest Pay" if not filtered_data.empty else "Mock Data")
+col1.metric("Top City Match", top_city, "Highest Pay")
 col2.metric("Projected Savings", "$1,204/mo", "-5% vs avg")
-col3.metric("Average Salary", f"${avg_salary:,.0f}" if avg_salary > 0 else "N/A", "For this role")
+col3.metric("Average Salary", f"${avg_salary:,.0f}", "For this role")
 
 st.divider()
 
@@ -125,146 +108,108 @@ tab1, tab2, tab3 = st.tabs(["Map View", "Budget Lab", "Resume Pivot"])
 with tab1:
     st.subheader(f"Where can a {selected_category} thrive?")
     
-    # Check if we have data for this career path
-    if filtered_data.empty:
-        st.warning("⚠️ No data found for this career path yet. Showing mock data for demonstration.")
-        map_data = df_mock
-        spotlight_city = "Austin, Texas"
-        spotlight_text = "Highest 'Thriving Score' for this career. No State Income Tax saves you **$4,200/year**."
-    else:
-        map_data = filtered_data
-        # Get top city from filtered data
-        if 'Salary' in filtered_data.columns:
-            top_row = filtered_data.loc[filtered_data['Salary'].idxmax()]
-            spotlight_city = top_row['City'] if 'City' in top_row else "Top City"
-            spotlight_salary = f"${top_row['Salary']:,.0f}" if 'Salary' in top_row else "N/A"
-            spotlight_text = f"Highest salary for {selected_category}: **{spotlight_salary}/year**"
-        else:
-            spotlight_city = filtered_data.iloc[0]['City'] if 'City' in filtered_data.columns else "Top City"
-            spotlight_text = f"Best match for {selected_category} professionals."
+    # Use filtered data (we already checked it's not empty earlier)
+    map_data = filtered_data
+    
+    # Get top city from filtered data
+    top_row = filtered_data.loc[filtered_data['Salary'].idxmax()]
+    spotlight_city = top_row['City']
+    spotlight_salary = f"${top_row['Salary']:,.0f}"
+    spotlight_text = f"Highest salary for {selected_category}: **{spotlight_salary}/year**"
     
     # Create a 'Spotlight' section for the #1 city
     with st.container():
         st.markdown("### 🌟 Your Best Move")
         inner_col1, inner_col2 = st.columns([1, 2])
         with inner_col1:
-            st.image("https://img.icons8.com/fluency/96/star.png")  # Or a city icon
+            st.image("https://img.icons8.com/fluency/96/star.png")
         with inner_col2:
             st.subheader(spotlight_city)
             st.write(spotlight_text)
     
     st.divider()
     
-    # Determine which columns to use for the map
-    has_lat_lon = 'Lat' in map_data.columns and 'Lon' in map_data.columns
-    has_score = 'Score' in map_data.columns
-    has_salary = 'Salary' in map_data.columns
+    # Enhanced scatter geo map using Salary for size and color
+    hover_data_dict = {
+        'Salary': ':$,.0f',
+        'Rent': ':$,.0f',
+        'COL': True,
+        'State': True,
+        'Lat': False,
+        'Lon': False
+    }
     
-    if has_lat_lon and (has_score or has_salary):
-        # Enhanced scatter geo map (no token required)
-        size_col = 'Score' if has_score else 'Salary'
-        color_col = 'Score' if has_score else 'Salary'
-        
-        # Build hover_data dynamically
-        hover_data_dict = {}
-        if has_score:
-            hover_data_dict['Score'] = True
-        if has_salary:
-            hover_data_dict['Salary'] = ':$,.0f'
-        if 'Rent' in map_data.columns:
-            hover_data_dict['Rent'] = ':$,.0f'
-        if 'Jobs' in map_data.columns:
-            hover_data_dict['Jobs'] = True
-        hover_data_dict['Lat'] = False
-        hover_data_dict['Lon'] = False
-        
-        fig_map = px.scatter_geo(
-            map_data,
-            lat="Lat",
-            lon="Lon",
-            size=size_col,
-            color=color_col,
-            hover_name="City",
-            hover_data=hover_data_dict,
-            color_continuous_scale="Viridis",
-            size_max=30,
-            scope="usa",
-            title=f"Best Cities for {selected_category}"
-        )
-        
-        fig_map.update_layout(
-            height=600,
-            geo=dict(
-                bgcolor='#0E1117',
-                lakecolor='#1E2130',
-                landcolor='#1E2130',
-                showlakes=True,
-                showcountries=True,
-                countrycolor='#2E3440'
-            ),
-            paper_bgcolor='#0E1117',
-            plot_bgcolor='#0E1117',
-            font=dict(color='white')
-        )
-        
-        st.plotly_chart(fig_map, use_container_width=True)
-    else:
-        st.error("Map data is missing required columns (Lat, Lon, Score/Salary). Please check your data source.")
+    fig_map = px.scatter_geo(
+        map_data,
+        lat="Lat",
+        lon="Lon",
+        size="Salary",
+        color="Salary",
+        hover_name="City",
+        hover_data=hover_data_dict,
+        color_continuous_scale="Viridis",
+        size_max=30,
+        scope="usa",
+        title=f"Best Cities for {selected_category}"
+    )
+    
+    fig_map.update_layout(
+        height=600,
+        geo=dict(
+            bgcolor='#0E1117',
+            lakecolor='#1E2130',
+            landcolor='#1E2130',
+            showlakes=True,
+            showcountries=True,
+            countrycolor='#2E3440'
+        ),
+        paper_bgcolor='#0E1117',
+        plot_bgcolor='#0E1117',
+        font=dict(color='white')
+    )
+    
+    st.plotly_chart(fig_map, use_container_width=True)
     
     with st.expander("See the math behind your score"):
         st.write(f"Based on a {lifestyle} lifestyle with ${debt:,} in debt...")
-        if not filtered_data.empty:
-            st.dataframe(filtered_data.head(10))
+        st.dataframe(filtered_data)
 
 # ========== TAB 2: BUDGET LAB ==========
 with tab2:
     st.subheader("Financial Reality Check")
     
     # Add city selector for deep dive analysis
-    if not filtered_data.empty and 'City' in filtered_data.columns:
-        target_city = st.selectbox('🎯 Analyze a City', filtered_data['City'].unique())
-        
-        # Get the specific city data
-        city_data = filtered_data[filtered_data['City'] == target_city].iloc[0]
-        
-        # Extract city-specific values
-        city_salary = city_data.get('Salary', 100000)
-        city_rent = city_data.get('Rent', 1500)
-        city_state = city_data.get('State', 'TX')  # Default to TX if not available
-        
-        # Calculate real financial metrics using logic functions
-        monthly_net = calculate_taxes(city_salary, city_state)
-        
-        # Estimate monthly loan payment (10-year standard repayment)
-        monthly_loan_payment = (debt / 10000) * 115
-        
-        # Estimate lifestyle costs based on user's preference
-        lifestyle_costs = {
-            'Frugal': 900,
-            'Balanced': 1700,
-            'Boujee': 3000
-        }
-        lifestyle_cost = lifestyle_costs.get(lifestyle, 1700)
-        
-        # Calculate projected savings
-        monthly_savings = project_savings(monthly_net, city_rent, monthly_loan_payment, lifestyle_cost)
-        
-        # Calculate taxes paid (for donut chart)
-        gross_monthly = city_salary / 12
-        taxes_paid = gross_monthly - monthly_net
-        
-    else:
-        # Fallback to mock data
-        st.warning("⚠️ No city data available. Using sample calculations.")
-        target_city = "Austin"
-        city_salary = 100000
-        city_rent = 1200
-        city_state = "TX"
-        monthly_net = 5862
-        monthly_loan_payment = 300
-        lifestyle_cost = 1700
-        monthly_savings = 2362
-        taxes_paid = 1471
+    target_city = st.selectbox('🎯 Analyze a City', filtered_data['City'].unique())
+    
+    # Get the specific city data
+    city_data = filtered_data[filtered_data['City'] == target_city].iloc[0]
+    
+    # Extract city-specific values
+    city_salary = city_data['Salary']
+    city_rent = city_data['Rent']
+    city_state = city_data['State']
+    city_col = city_data['COL']
+    
+    # Calculate real financial metrics using logic functions
+    monthly_net = calculate_taxes(city_salary, city_state)
+    
+    # Estimate monthly loan payment (10-year standard repayment)
+    monthly_loan_payment = (debt / 10000) * 115
+    
+    # Estimate lifestyle costs based on user's preference
+    lifestyle_costs = {
+        'Frugal': 900,
+        'Balanced': 1700,
+        'Boujee': 3000
+    }
+    lifestyle_cost = lifestyle_costs.get(lifestyle, 1700)
+    
+    # Calculate projected savings
+    monthly_savings = project_savings(monthly_net, city_rent, monthly_loan_payment, lifestyle_cost)
+    
+    # Calculate taxes paid (for donut chart)
+    gross_monthly = city_salary / 12
+    taxes_paid = gross_monthly - monthly_net
     
     left_col, right_col = st.columns([1, 1])
     
