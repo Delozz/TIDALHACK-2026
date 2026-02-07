@@ -1,41 +1,54 @@
-TAX_RATES = {
-    'TX': 0.00, 'WA': 0.00, 'FL': 0.00, 'NV': 0.00, # No tax states
-    'CA': 0.09, 'NY': 0.06, 'MA': 0.05, 'IL': 0.05, 'CO': 0.045
-}
+# src/logic.py
 
-def calculate_net_income(gross_salary, state, debt):
-
-    # 1. Taxes
-    fed_tax = 0.18
-    fica_tax = 0.0765
-    state_tax = TAX_RATES.get(state, 0.04) # Default to 4% if unknown
-    
-    total_tax_rate = fed_tax + fica_tax + state_tax
-    net_annual = gross_salary * (1 - total_tax_rate)
-    
-    # 2. Student Loans (Standard 10-year plan approximation)
-    loan_payment_monthly = (debt / 10000) * 115
-    
-    monthly_net = (net_annual / 12) - loan_payment_monthly
-    return round(monthly_net, 2)
-
-def calculate_thriving_score(net_monthly, rent, col_index, lifestyle_factor=1.0):
+def calculate_net_monthly(gross_salary, debt_amount):
     """
-    Returns a score 0-100.
+    Estimates monthly take-home pay.
     """
-    # Estimated "Survival" Cost = Rent + Groceries/Transport
-    # We estimate non-rent living costs based on COL Index
-    # (COL 100 ~ $1200/mo for food/transport)
-    living_cost = (col_index / 100) * 1200 * lifestyle_factor
+    monthly_gross = gross_salary / 12
     
-    total_expenses = rent + living_cost
-    discretionary_income = net_monthly - total_expenses
+    # 1. TAXES
+    # Federal + FICA is ~22%. 
+    # We add a flat 5% buffer for State/Local tax variances.
+    effective_tax_rate = 0.27 
+    taxes = monthly_gross * effective_tax_rate
     
-    # SCORING ALGORITHM
-    # If Discretionary < $0 -> Score < 40 (Failing)
-    # If Discretionary = $1000 -> Score 75 (Comfortable)
-    # If Discretionary > $2000 -> Score 95+ (Thriving)
+    # 2. LOANS
+    # Standard Repayment: ~$120/mo per $10k debt
+    loan_payment = (debt_amount / 10000) * 120
     
-    score = 40 + (discretionary_income / 35)
+    net = monthly_gross - taxes - loan_payment
+    return net
+
+def get_thriving_score(net_monthly, rent_cost, col_index):
+    """
+    Calculates the 'Thriving Score' (0-100).
+    Now with Rent Burden Penalty!
+    """
+    # 1. ESTIMATE LIVING COSTS (Non-Rent)
+    # Baseline: Index 100 (NYC) = ~$1,800/mo for food/transport/fun
+    est_living_expenses = (col_index / 100) * 1800
     
+    # 2. TOTAL MONTHLY SPEND
+    total_cost = rent_cost + est_living_expenses
+    
+    # 3. DISCRETIONARY INCOME (Money left over)
+    discretionary = net_monthly - total_cost
+    
+    # --- SCORING ALGORITHM (STRICTER) ---
+    
+    # Base Score starts at 50 (Survival)
+    score = 50
+    
+    # Bonus: +1 point for every $60 of extra cash (Harder to earn points)
+    score += (discretionary / 60)
+    
+    # PENALTY: Rent Burden
+    # Financial Advice: Rent should not exceed 30% of Net Income.
+    rent_ratio = rent_cost / net_monthly
+    if rent_ratio > 0.30:
+        # If rent is 40% of income, penalize (40 - 30) * 2 = 20 points
+        penalty = (rent_ratio - 0.30) * 100 * 2
+        score -= penalty
+        
+    # Cap it between 0 and 100
     return int(max(0, min(100, score)))
