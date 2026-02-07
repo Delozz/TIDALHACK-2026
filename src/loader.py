@@ -1,85 +1,70 @@
 # src/loader.py
 import pandas as pd
-import numpy as np
 import streamlit as st
 
+# --- CONFIGURATION ---
+CAREER_BASE_SALARIES = {
+    'Software Engineer': 115000,
+    'Data Scientist': 110000,
+    'Cybersecurity Analyst': 105000,
+    'UX Designer': 95000,
+    'Product Manager': 120000
+}
+
+# Tier Multipliers (Higher Tier = Higher Salary)
+TIER_MULTIPLIERS = {
+    1: 1.35,  # SF, NYC
+    2: 1.15,  # Austin, Denver
+    3: 0.95,  # Raleigh, SLC
+    4: 0.85   # College Towns
+}
+
+BASE_CITIES = [
+    # Tier 1
+    {'City': 'San Francisco', 'State': 'CA', 'Tier': 1, 'Lat': 37.77, 'Lon': -122.41, 'Rent': 3200, 'COL': 96},
+    {'City': 'New York', 'State': 'NY', 'Tier': 1, 'Lat': 40.71, 'Lon': -74.00, 'Rent': 3600, 'COL': 100},
+    {'City': 'Seattle', 'State': 'WA', 'Tier': 1, 'Lat': 47.60, 'Lon': -122.33, 'Rent': 2300, 'COL': 85},
+    {'City': 'Boston', 'State': 'MA', 'Tier': 1, 'Lat': 42.36, 'Lon': -71.05, 'Rent': 2700, 'COL': 88},
+    
+    # Tier 2
+    {'City': 'Austin', 'State': 'TX', 'Tier': 2, 'Lat': 30.26, 'Lon': -97.74, 'Rent': 1700, 'COL': 65},
+    {'City': 'Denver', 'State': 'CO', 'Tier': 2, 'Lat': 39.73, 'Lon': -104.99, 'Rent': 1900, 'COL': 68},
+    {'City': 'Chicago', 'State': 'IL', 'Tier': 2, 'Lat': 41.87, 'Lon': -87.62, 'Rent': 2000, 'COL': 70},
+    {'City': 'Atlanta', 'State': 'GA', 'Tier': 2, 'Lat': 33.74, 'Lon': -84.38, 'Rent': 1800, 'COL': 66},
+
+    # Tier 3
+    {'City': 'Raleigh', 'State': 'NC', 'Tier': 3, 'Lat': 35.77, 'Lon': -78.63, 'Rent': 1400, 'COL': 63},
+    {'City': 'Huntsville', 'State': 'AL', 'Tier': 3, 'Lat': 34.73, 'Lon': -86.58, 'Rent': 1100, 'COL': 55},
+    {'City': 'Columbus', 'State': 'OH', 'Tier': 3, 'Lat': 39.96, 'Lon': -82.99, 'Rent': 1200, 'COL': 58},
+    
+    # Tier 4
+    {'City': 'College Station', 'State': 'TX', 'Tier': 4, 'Lat': 30.62, 'Lon': -96.33, 'Rent': 900, 'COL': 50},
+    {'City': 'Ann Arbor', 'State': 'MI', 'Tier': 4, 'Lat': 42.28, 'Lon': -83.74, 'Rent': 1800, 'COL': 68},
+]
+
 @st.cache_data
-def load_data():
+def load_all_salaries():
     """
-    GENERATES 1000+ ROWS OF REALISTIC SYNTHETIC DATA.
-    Includes 25 US Cities with accurate Cost of Living & Rent approximations.
+    Generates the Cross-Product of Cities X Careers.
     """
-    # 1. THE MASTER CITY LIST (25 Cities)
-    # Rent is approx for a 1-bedroom apt near city center. 
-    # COL is Numbeo Index (NYC = 100).
-    cities = [
-        # --- TIER 1: EXPENSIVE TECH HUBS ---
-        {'City': 'San Francisco', 'State': 'CA', 'Lat': 37.77, 'Lon': -122.41, 'Rent': 3200, 'COL': 96},
-        {'City': 'New York', 'State': 'NY', 'Lat': 40.71, 'Lon': -74.00, 'Rent': 3600, 'COL': 100},
-        {'City': 'Seattle', 'State': 'WA', 'Lat': 47.60, 'Lon': -122.33, 'Rent': 2300, 'COL': 85},
-        {'City': 'Boston', 'State': 'MA', 'Lat': 42.36, 'Lon': -71.05, 'Rent': 2700, 'COL': 88},
-        {'City': 'Los Angeles', 'State': 'CA', 'Lat': 34.05, 'Lon': -118.24, 'Rent': 2600, 'COL': 82},
-        {'City': 'Washington', 'State': 'DC', 'Lat': 38.90, 'Lon': -77.03, 'Rent': 2400, 'COL': 84},
-        {'City': 'San Diego', 'State': 'CA', 'Lat': 32.71, 'Lon': -117.16, 'Rent': 2500, 'COL': 80},
-
-        # --- TIER 2: RISING TECH HUBS ---
-        {'City': 'Austin', 'State': 'TX', 'Lat': 30.26, 'Lon': -97.74, 'Rent': 1700, 'COL': 65},
-        {'City': 'Denver', 'State': 'CO', 'Lat': 39.73, 'Lon': -104.99, 'Rent': 1900, 'COL': 68},
-        {'City': 'Atlanta', 'State': 'GA', 'Lat': 33.74, 'Lon': -84.38, 'Rent': 1800, 'COL': 66},
-        {'City': 'Chicago', 'State': 'IL', 'Lat': 41.87, 'Lon': -87.62, 'Rent': 2000, 'COL': 70},
-        {'City': 'Miami', 'State': 'FL', 'Lat': 25.76, 'Lon': -80.19, 'Rent': 2400, 'COL': 78},
-        {'City': 'Dallas', 'State': 'TX', 'Lat': 32.77, 'Lon': -96.79, 'Rent': 1600, 'COL': 64},
-        {'City': 'Phoenix', 'State': 'AZ', 'Lat': 33.44, 'Lon': -112.07, 'Rent': 1500, 'COL': 62},
-
-        # --- TIER 3: HIDDEN GEMS (Good for "Thriving Score") ---
-        {'City': 'Raleigh', 'State': 'NC', 'Lat': 35.77, 'Lon': -78.63, 'Rent': 1400, 'COL': 63},
-        {'City': 'Salt Lake City', 'State': 'UT', 'Lat': 40.76, 'Lon': -111.89, 'Rent': 1500, 'COL': 64},
-        {'City': 'Huntsville', 'State': 'AL', 'Lat': 34.73, 'Lon': -86.58, 'Rent': 1100, 'COL': 55},
-        {'City': 'Columbus', 'State': 'OH', 'Lat': 39.96, 'Lon': -82.99, 'Rent': 1200, 'COL': 58},
-        {'City': 'Pittsburgh', 'State': 'PA', 'Lat': 40.44, 'Lon': -79.99, 'Rent': 1300, 'COL': 60},
-        {'City': 'Minneapolis', 'State': 'MN', 'Lat': 44.97, 'Lon': -93.26, 'Rent': 1400, 'COL': 66},
-        {'City': 'Charlotte', 'State': 'NC', 'Lat': 35.22, 'Lon': -80.84, 'Rent': 1500, 'COL': 64},
-        
-        # --- TIER 4: COLLEGE TOWNS (The Benchmark) ---
-        {'City': 'College Station', 'State': 'TX', 'Lat': 30.62, 'Lon': -96.33, 'Rent': 900, 'COL': 50},
-        {'City': 'Boulder', 'State': 'CO', 'Lat': 40.01, 'Lon': -105.27, 'Rent': 2100, 'COL': 75},
-        {'City': 'Ann Arbor', 'State': 'MI', 'Lat': 42.28, 'Lon': -83.74, 'Rent': 1800, 'COL': 68},
-    ]
-
-    # 2. GENERATE ROLES & SALARIES
-    roles = ['Software Engineer', 'Data Scientist', 'Product Manager', 'Cybersecurity Analyst', 'UX Designer']
     data = []
     
-    np.random.seed(42) # Consistent numbers every time you run it
-
-    for city in cities:
-        for role in roles:
-            # Base Salary Logic:
-            # - Start with $70k base
-            # - Add $600 for every COL point (So NYC pays ~$24k more than Austin base)
-            market_rate = 70000 + (city['COL'] * 600)
-
-            # Role Multipliers
-            if role == 'Data Scientist': market_rate *= 1.12
-            if role == 'Product Manager': market_rate *= 1.15
-            if role == 'Cybersecurity Analyst': market_rate *= 1.08
-            if role == 'UX Designer': market_rate *= 0.95
-
-            # Create 3-5 variations per role per city (Junior, Mid, Senior)
-            # This makes the scatter plot look full and real
-            for _ in range(4): 
-                variation = np.random.uniform(0.85, 1.3) # +/- 15-30% variance
-                final_salary = int(market_rate * variation)
-                
-                data.append({
-                    'City': city['City'],
-                    'State': city['State'],
-                    'Role': role,
-                    'Salary': final_salary,
-                    'Rent_Index': city['Rent'], # Using actual rent $ for simplicity in MVP
-                    'COL_Index': city['COL'],
-                    'Lat': city['Lat'],
-                    'Lon': city['Lon']
-                })
-
+    for city in BASE_CITIES:
+        for career, base_salary in CAREER_BASE_SALARIES.items():
+            
+            # Calculate Localized Salary
+            tier_adjust = TIER_MULTIPLIERS.get(city['Tier'], 1.0)
+            projected_salary = int(base_salary * tier_adjust)
+            
+            data.append({
+                'City': city['City'],
+                'State': city['State'],
+                'Lat': city['Lat'],
+                'Lon': city['Lon'],
+                'Rent': city['Rent'],
+                'COL': city['COL'],
+                'Category': career,        # Replaces 'Role'
+                'Salary': projected_salary
+            })
+            
     return pd.DataFrame(data)

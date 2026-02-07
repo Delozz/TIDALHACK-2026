@@ -1,54 +1,62 @@
-# src/logic.py
+# File: src/logic.py
 
-def calculate_net_monthly(gross_salary, debt_amount):
-    """
-    Estimates monthly take-home pay.
-    """
-    monthly_gross = gross_salary / 12
-    
-    # 1. TAXES
-    # Federal + FICA is ~22%. 
-    # We add a flat 5% buffer for State/Local tax variances.
-    effective_tax_rate = 0.27 
-    taxes = monthly_gross * effective_tax_rate
-    
-    # 2. LOANS
-    # Standard Repayment: ~$120/mo per $10k debt
-    loan_payment = (debt_amount / 10000) * 120
-    
-    net = monthly_gross - taxes - loan_payment
-    return net
+def format_currency(amount):
+    """Helper to make money look pretty ($1,200)"""
+    return f"${int(amount):,}"
 
-def get_thriving_score(net_monthly, rent_cost, col_index):
+def calculate_taxes(gross_salary, state):
     """
-    Calculates the 'Thriving Score' (0-100).
-    Now with Rent Burden Penalty!
+    Calculates monthly net income based on simple tax rules.
     """
-    # 1. ESTIMATE LIVING COSTS (Non-Rent)
-    # Baseline: Index 100 (NYC) = ~$1,800/mo for food/transport/fun
-    est_living_expenses = (col_index / 100) * 1800
+    # 1. Federal Tax (Flat ~22% estimate for single filers in this bracket)
+    fed_tax_rate = 0.22
     
-    # 2. TOTAL MONTHLY SPEND
-    total_cost = rent_cost + est_living_expenses
+    # 2. State Tax Rules
+    no_tax_states = ['TX', 'FL', 'WA', 'NV', 'TN', 'NH', 'SD', 'WY', 'AK']
     
-    # 3. DISCRETIONARY INCOME (Money left over)
-    discretionary = net_monthly - total_cost
-    
-    # --- SCORING ALGORITHM (STRICTER) ---
-    
-    # Base Score starts at 50 (Survival)
-    score = 50
-    
-    # Bonus: +1 point for every $60 of extra cash (Harder to earn points)
-    score += (discretionary / 60)
-    
-    # PENALTY: Rent Burden
-    # Financial Advice: Rent should not exceed 30% of Net Income.
-    rent_ratio = rent_cost / net_monthly
-    if rent_ratio > 0.30:
-        # If rent is 40% of income, penalize (40 - 30) * 2 = 20 points
-        penalty = (rent_ratio - 0.30) * 100 * 2
-        score -= penalty
+    if state.upper() in no_tax_states:
+        state_tax_rate = 0.00
+    else:
+        state_tax_rate = 0.05  # Flat 5% average for others
         
-    # Cap it between 0 and 100
-    return int(max(0, min(100, score)))
+    total_tax_rate = fed_tax_rate + state_tax_rate
+    
+    annual_net = gross_salary * (1 - total_tax_rate)
+    monthly_net = annual_net / 12
+    
+    return int(monthly_net)
+
+def calculate_thriving_score(monthly_net, rent, col_index):
+    """
+    Returns a score 0-100.
+    Formula: Uses discretionary income weighted by Cost of Living.
+    """
+    # Safety check to avoid division by zero
+    if col_index == 0: col_index = 50
+    
+    discretionary = monthly_net - rent
+    
+    # The Formula requested: (Net - Rent) / COL * 10
+    # Example: ($6000 - $2000) / 70 * 10 = 571 (Too high, need to normalize)
+    # Adjusted Logic to fit 0-100 scale:
+    
+    raw_score = (discretionary / col_index) * 1.5
+    
+    # Cap at 100, Floor at 0
+    return int(max(0, min(100, raw_score)))
+
+def project_savings(monthly_net, rent, loan_payment, lifestyle):
+    """
+    Returns monthly savings after all expenses.
+    """
+    lifestyle_map = {
+        'Frugal': 800,     # Ramen and Netflix
+        'Balanced': 1500,  # Gym membership and occasional dinners
+        'Boujee': 2500     # Whole Foods and Cocktails
+    }
+    
+    # Default to Balanced if string doesn't match
+    lifestyle_cost = lifestyle_map.get(lifestyle, 1500)
+    
+    savings = monthly_net - rent - loan_payment - lifestyle_cost
+    return int(savings)
